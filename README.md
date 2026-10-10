@@ -1,18 +1,26 @@
-# svgfetch-icons
+<div align="center">
+  <a href="https://github.com/avdeshjadon/svgfetch-icons">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="public/full_logo_dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="public/full_logo.svg">
+      <img src="public/full_logo_dark.svg" alt="svgfetch icons" width="480" />
+    </picture>
+  </a>
 
-<p align="center">
-  <strong>Curated catalog of 1,960+ high-resolution, optimized SVG brand logos and icon marks.</strong>
-  <br>
-  Official asset registry for <a href="https://github.com/avdeshjadon/svgfetch">svgfetch</a> and modern web applications.
-</p>
+  <p>
+    <strong>Curated catalog of 1,960+ high-resolution, optimized SVG brand logos and icon marks.</strong>
+    <br>
+    Official asset registry for <a href="https://github.com/avdeshjadon/svgfetch">svgfetch</a> and modern web applications.
+  </p>
 
-<p align="center">
-  <a href="#cdn-usage">CDN Usage</a> •
-  <a href="#manifest-catalog">Manifest Catalog</a> •
-  <a href="#variants">Variants</a> •
-  <a href="#cli-integration">CLI Integration</a> •
-  <a href="#license">License</a>
-</p>
+  <p>
+    <a href="#cdn-usage">CDN Usage</a> •
+    <a href="#manifest-catalog">Manifest Catalog</a> •
+    <a href="#variants">Variants</a> •
+    <a href="#cli-integration">CLI Integration</a> •
+    <a href="#license">License</a>
+  </p>
+</div>
 
 ---
 
