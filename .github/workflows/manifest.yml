@@ -1,0 +1,53 @@
+name: Auto Generate Manifest & Purge CDN
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'logos/**'
+      - 'scripts/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'logos/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate manifest.json
+        run: node scripts/generate-manifest.js
+
+      - name: Commit and push if manifest changed
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain manifest.json)" ]; then
+            git add manifest.json
+            git commit -m "chore: auto-update manifest.json [skip ci]"
+            git push origin main
+          else
+            echo "manifest.json is up to date."
+          fi
+
+      - name: Purge jsDelivr CDN cache
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -X POST https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/manifest.json || true
