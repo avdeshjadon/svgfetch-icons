@@ -7,3 +7,4 @@ This document tracks all new vector assets curated into the `svgfetch-icons` lib
 | Date & Time (UTC) | Brand | Category | File Path | Variant | Source |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | 2026-10-10 21:23:52 UTC | Myntra | e-commerce | `logos/e-commerce/myntra.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
+| 2026-10-10 16:28:09 UTC | Zomato | general | `logos/general/zomato.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
