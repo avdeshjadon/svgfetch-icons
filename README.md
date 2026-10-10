@@ -18,6 +18,7 @@
     <a href="#manifest-catalog">Manifest Catalog</a> •
     <a href="#variants">Variants</a> •
     <a href="#cli-integration">CLI Integration</a> •
+    <a href="#curation-log">Curation Log</a> •
     <a href="#license">License</a>
   </p>
 </div>
@@ -103,6 +104,12 @@ npx svgfetch instagram
 npm install -g svgfetch
 svgfetch amazon
 ```
+
+---
+
+## Curation Log
+
+All automated additions and community contributions from Wikimedia Commons are tracked in real time in [CONTRIBUTIONS.md](CONTRIBUTIONS.md).
 
 ---
 
