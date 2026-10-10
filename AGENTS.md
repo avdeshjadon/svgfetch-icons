@@ -1,8 +1,8 @@
 # AI Agent Operating Guidelines: svgfetch-icons
 
 > **CRITICAL INSTRUCTION**: This repository (`svgfetch-icons`) is the central asset registry and CDN source for:
-> 1. `svg-fetch` (Rust CLI core at `/Users/avdeshjadon/svg-fetch`)
-> 2. `svgfetch-frontend` (React + Vite web app at `/Users/avdeshjadon/svgfetch-frontend`)
+> 1. `svg-fetch` (Rust CLI core at sibling directory `../svg-fetch`)
+> 2. `svgfetch-frontend` (React + Vite web app at sibling directory `../svgfetch-frontend`)
 >
 > You MUST read [`ECOSYSTEM.md`](ECOSYSTEM.md) before making changes.
 
@@ -20,7 +20,7 @@
    - Every time an SVG is added, deleted, or renamed:
      - Run `node scripts/generate-manifest.js` (or `npm run manifest`) to regenerate `manifest.json`.
      - Append the addition to [`CONTRIBUTIONS.md`](CONTRIBUTIONS.md) with exact UTC timestamp, category, and source.
-     - Copy updated `manifest.json` to `/Users/avdeshjadon/svg-fetch/data/curated_manifest.json`.
+     - Copy updated `manifest.json` to sibling repo `../svg-fetch/data/curated_manifest.json`.
 
 4. **CDN Cache Purging**:
    - When pushing changes to `main`, ensure jsDelivr CDN is purged (`curl -X POST https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/manifest.json`).
