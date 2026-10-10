@@ -4,21 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       brand:
-        description: 'Brand Name (e.g. Zepto)'
+        description: 'Brand Name (e.g. Notion)'
         required: true
       category:
-        description: 'Category (e.g. e-commerce, general)'
+        description: 'Category (e.g. e-commerce, general, ai, devops)'
         required: false
         default: 'general'
       variant:
-        description: 'Variant (logo or icon)'
+        description: 'Variant: logo or icon'
         required: false
         default: 'logo'
       svg_url:
-        description: 'Wikimedia / Source SVG URL'
+        description: 'Direct SVG URL (optional — skip Wikimedia search)'
         required: false
       svg_content:
-        description: 'Raw SVG content'
+        description: 'Raw SVG content (optional — highest priority)'
         required: false
   repository_dispatch:
     types: [curate-brand]
@@ -51,10 +51,11 @@ jobs:
       - name: Process Curation Request
         id: process
         run: |
-          node -e '
+          node << 'NODE_SCRIPT'
           const fs = require("fs");
           const path = require("path");
           const { execSync } = require("child_process");
+          const https = require("https");
 
           const event = process.env.EVENT_NAME;
           let brand = "";
@@ -63,137 +64,279 @@ jobs:
           let svgContent = "";
           let svgUrl = "";
           let issueNumber = null;
+          let message = "";
 
+          // ── 1. Extract inputs from trigger source ─────────────────────────────
           if (event === "workflow_dispatch") {
-            brand = process.env.INPUT_BRAND || "";
+            brand    = process.env.INPUT_BRAND    || "";
             category = process.env.INPUT_CATEGORY || "general";
-            variant = process.env.INPUT_VARIANT || "logo";
-            svgUrl = process.env.INPUT_SVG_URL || "";
+            variant  = process.env.INPUT_VARIANT  || "logo";
+            svgUrl   = process.env.INPUT_SVG_URL  || "";
             svgContent = process.env.INPUT_SVG_CONTENT || "";
           } else if (event === "repository_dispatch") {
-            const clientPayload = JSON.parse(process.env.CLIENT_PAYLOAD || "{}");
-            brand = clientPayload.brand || "";
-            category = clientPayload.category || "general";
-            variant = clientPayload.variant || "logo";
-            svgUrl = clientPayload.svg_url || "";
-            svgContent = clientPayload.svg_content || "";
+            const p  = JSON.parse(process.env.CLIENT_PAYLOAD || "{}");
+            brand    = p.brand    || "";
+            category = p.category || "general";
+            variant  = p.variant  || "logo";
+            svgUrl   = p.svg_url  || "";
+            svgContent = p.svg_content || "";
+            message  = p.message  || "";
           } else if (event === "issues") {
             const title = process.env.ISSUE_TITLE || "";
-            const body = process.env.ISSUE_BODY || "";
+            const body  = process.env.ISSUE_BODY  || "";
             issueNumber = process.env.ISSUE_NUMBER;
 
             // Title format: [curate]: BrandName | category | variant
             const parts = title.replace(/^\[curate\]:\s*/i, "").split("|").map(s => s.trim());
             brand = parts[0] || "";
             if (parts[1]) category = parts[1];
-            if (parts[2]) variant = parts[2];
+            if (parts[2]) variant  = parts[2];
 
-            // Extract SVG from body (can be inside ```xml or ```svg codeblock, or raw)
-            const codeBlockMatch = body.match(/```(?:xml|svg)?\s*([\s\S]*?)```/i);
-            if (codeBlockMatch) {
-              svgContent = codeBlockMatch[1].trim();
-            } else if (body.trim().startsWith("<svg")) {
-              svgContent = body.trim();
-            } else if (body.trim().startsWith("http")) {
-              svgUrl = body.trim().split(/\s+/)[0];
-            }
+            // Extract SVG from markdown code block or bare <svg>
+            const codeMatch = body.match(/```(?:xml|svg)?\s*([\s\S]*?)```/i);
+            if (codeMatch)                         svgContent = codeMatch[1].trim();
+            else if (body.trim().startsWith("<svg")) svgContent = body.trim();
+            else if (body.trim().startsWith("http")) svgUrl = body.trim().split(/\s+/)[0];
           }
 
-          if (!brand) {
-            console.error("Brand name is missing!");
-            process.exit(1);
-          }
+          if (!brand) { console.error("[error] Brand name is missing!"); process.exit(1); }
 
-          // Fetch from URL if content was not provided directly
-          if (!svgContent && svgUrl) {
-            console.log("Fetching SVG from URL:", svgUrl);
-            svgContent = execSync(`curl -sSL -H "User-Agent: svgfetch/0.3" "${svgUrl}"`, { encoding: "utf8" });
-          }
-
-          if (!svgContent || !svgContent.includes("<svg")) {
-            console.error("Invalid SVG content received!");
-            process.exit(1);
-          }
-
-          // Security validation: Reject script tags or oversized files
-          if (/<script/i.test(svgContent)) {
-            console.error("Security alert: SVG contains forbidden script tag!");
-            process.exit(1);
-          }
-          if (Buffer.byteLength(svgContent, "utf8") > 150 * 1024) {
-            console.error("File exceeds maximum allowed size (150KB)!");
-            process.exit(1);
-          }
-
-          const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-          const fileName = (variant === "icon") ? `${brandSlug}-icon.svg` : `${brandSlug}.svg`;
+          // ── 2. Compute slug & path ─────────────────────────────────────────────
+          const slug      = brand.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          const fileName  = (variant === "icon") ? `${slug}-icon.svg` : `${slug}.svg`;
           const targetDir = path.join("logos", category);
           const targetPath = path.join(targetDir, fileName);
 
-          if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
+          // ── 3. Duplicate check ─────────────────────────────────────────────────
+          if (fs.existsSync(targetPath)) {
+            console.log(`[info] \"${brand}\" (${fileName}) already exists — skipping.`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `category=${category}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `skipped=true\n`);
+            process.exit(0);
           }
 
+          // ── 4. Fetch SVG (URL first, then Wikimedia search) ───────────────────
+          function fetchUrl(url) {
+            return execSync(
+              `curl -sSL --max-time 20 -H "User-Agent: svgfetch-bot/1.0" "${url}"`,
+              { encoding: "utf8" }
+            );
+          }
+
+          if (!svgContent && svgUrl) {
+            console.log(`[download] Fetching SVG from provided URL: ${svgUrl}`);
+            svgContent = fetchUrl(svgUrl);
+          }
+
+          if (!svgContent) {
+            // Wikimedia Commons API: search for the brand's logo SVG
+            console.log(`[info] No SVG provided. Searching Wikimedia Commons for "${brand}"...`);
+            const queries = [
+              `${brand} logo`,
+              `${brand}_logo`,
+              brand,
+            ];
+
+            for (const q of queries) {
+              const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q + " filetype:svg")}&srnamespace=6&srlimit=5&format=json`;
+              const resp = execSync(`curl -sSL --max-time 15 -H "User-Agent: svgfetch-bot/1.0" "${apiUrl}"`, { encoding: "utf8" });
+              const data = JSON.parse(resp);
+              const results = (data.query && data.query.search) ? data.query.search : [];
+
+              for (const result of results) {
+                const title  = result.title; // e.g. "File:Notion_logo.svg"
+                const encTitle = encodeURIComponent(title);
+                const infoUrl  = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encTitle}&prop=imageinfo&iiprop=url&format=json`;
+                try {
+                  const infoResp = execSync(`curl -sSL --max-time 15 -H "User-Agent: svgfetch-bot/1.0" "${infoUrl}"`, { encoding: "utf8" });
+                  const info = JSON.parse(infoResp);
+                  const pages  = info.query.pages;
+                  const pageId = Object.keys(pages)[0];
+                  if (pageId === "-1") continue;
+                  const fileUrl = pages[pageId].imageinfo[0].url;
+                  if (!fileUrl.endsWith(".svg")) continue;
+                  console.log(`[download] Trying Wikimedia SVG: ${fileUrl}`);
+                  const candidate = fetchUrl(fileUrl);
+                  if (candidate && candidate.includes("<svg")) {
+                    svgContent = candidate;
+                    console.log(`[download] Found: ${title}`);
+                    break;
+                  }
+                } catch(e) { /* try next */ }
+              }
+              if (svgContent) break;
+            }
+          }
+
+          if (!svgContent || !svgContent.includes("<svg")) {
+            console.error(`[error] Could not obtain valid SVG for "${brand}". Provide --svg_url or submit raw SVG in the issue body.`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `failed=true\n`);
+            process.exit(1);
+          }
+
+          // ── 5. Security validation ─────────────────────────────────────────────
+          const forbidden = [
+            /<script/i,
+            /on\w+\s*=/i,           // inline event handlers
+            /<foreignObject/i,       // embedded HTML
+            /<use[^>]+href\s*=\s*["'](?:https?:\/\/|\/\/)/i,  // external use refs
+          ];
+          for (const re of forbidden) {
+            if (re.test(svgContent)) {
+              console.error(`[error] Security validation failed: forbidden pattern found (${re.source}).`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `failed=true\n`);
+              process.exit(1);
+            }
+          }
+          const sizeKB = Buffer.byteLength(svgContent, "utf8") / 1024;
+          if (sizeKB > 200) {
+            console.error(`[error] SVG exceeds 200 KB limit (${sizeKB.toFixed(1)} KB).`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `failed=true\n`);
+            process.exit(1);
+          }
+
+          // ── 6. Write SVG & update log ─────────────────────────────────────────
+          if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
           fs.writeFileSync(targetPath, svgContent.trim() + "\n", "utf8");
-          console.log(`Saved ${brand} to ${targetPath}`);
+          console.log(`[saved] ${targetPath} (${sizeKB.toFixed(1)} KB)`);
 
-          // Append to CONTRIBUTIONS.md
-          const logPath = "CONTRIBUTIONS.md";
-          const nowStr = new Date().toISOString().replace("T", " ").replace(/\..+/, " UTC");
-          const variantLabel = (variant === "icon") ? "Icon Mark" : "Full Logo";
-          const relPath = `logos/${category}/${fileName}`;
-          const row = `| ${nowStr} | ${brand} | ${category} | \`${relPath}\` | ${variantLabel} | Community Auto-Curation |\n`;
+          const logPath  = "CONTRIBUTIONS.md";
+          const nowStr   = new Date().toISOString().replace("T", " ").replace(/\..+/, " UTC");
+          const varLabel = (variant === "icon") ? "Icon Mark" : "Full Logo";
+          const row = `| ${nowStr} | ${brand} | ${category} | \`logos/${category}/${fileName}\` | ${varLabel} | Community Auto-Curation |${message ? " " + message : ""}\n`;
 
-          if (fs.existsSync(logPath)) {
+          if (!fs.existsSync(logPath)) {
+            fs.writeFileSync(logPath,
+              "# Asset Contribution & Curation Log\n\n" +
+              "| Date & Time (UTC) | Brand | Category | File Path | Variant | Source |\n" +
+              "| :--- | :--- | :--- | :--- | :--- | :--- |\n" + row,
+              "utf8"
+            );
+          } else {
             fs.appendFileSync(logPath, row, "utf8");
           }
 
-          // Regenerate manifest.json
+          // ── 7. Regenerate manifest ─────────────────────────────────────────────
           execSync("node scripts/generate-manifest.js", { stdio: "inherit" });
+          console.log("[sync] Manifest regenerated.");
 
-          // Output for next steps
+          // ── 8. Set GitHub step outputs ─────────────────────────────────────────
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `category=${category}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
-          '
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_BRAND: ${{ github.event.inputs.brand }}
-          INPUT_CATEGORY: ${{ github.event.inputs.category }}
-          INPUT_VARIANT: ${{ github.event.inputs.variant }}
-          INPUT_SVG_URL: ${{ github.event.inputs.svg_url }}
-          INPUT_SVG_CONTENT: ${{ github.event.inputs.svg_content }}
-          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `skipped=false\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `failed=false\n`);
 
-      - name: Commit and Push to Main
+          NODE_SCRIPT
+        env:
+          EVENT_NAME:       ${{ github.event_name }}
+          INPUT_BRAND:      ${{ github.event.inputs.brand }}
+          INPUT_CATEGORY:   ${{ github.event.inputs.category }}
+          INPUT_VARIANT:    ${{ github.event.inputs.variant }}
+          INPUT_SVG_URL:    ${{ github.event.inputs.svg_url }}
+          INPUT_SVG_CONTENT: ${{ github.event.inputs.svg_content }}
+          CLIENT_PAYLOAD:   ${{ toJson(github.event.client_payload) }}
+          ISSUE_TITLE:      ${{ github.event.issue.title }}
+          ISSUE_BODY:       ${{ github.event.issue.body }}
+          ISSUE_NUMBER:     ${{ github.event.issue.number }}
+
+      - name: Commit and Push
+        if: steps.process.outputs.skipped != 'true' && steps.process.outputs.failed != 'true'
         run: |
-          git config --global user.name "svgfetch-bot[bot]"
-          git config --global user.email "svgfetch-bot[bot]@users.noreply.github.com"
+          git config --global user.name  "svgfetch-bot[bot]"
+          git config --global user.email "svgfetch-bot@users.noreply.github.com"
           git add -A
           git commit -m "feat(curate): auto-curate ${{ steps.process.outputs.brand }} (${{ steps.process.outputs.category }}) [skip ci]"
           git push origin main
 
       - name: Purge jsDelivr CDN Cache
+        if: steps.process.outputs.skipped != 'true' && steps.process.outputs.failed != 'true'
         run: |
-          curl -s https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/manifest.json || true
+          curl -sf "https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/manifest.json" || true
+          curl -sf "https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/logos/${{ steps.process.outputs.category }}/" || true
 
-      - name: Close Issue (if applicable)
-        if: github.event_name == 'issues' && steps.process.outputs.issue_number != ''
+      - name: Comment on Issue — Success
+        if: |
+          github.event_name == 'issues' &&
+          steps.process.outputs.issue_number != '' &&
+          steps.process.outputs.failed != 'true' &&
+          steps.process.outputs.skipped != 'true'
         uses: actions/github-script@v7
         with:
           script: |
             await github.rest.issues.createComment({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
-              body: '🚀 **Successfully Curated!** "${{ steps.process.outputs.brand }}" has been validated, categorized under `${{ steps.process.outputs.category }}`, and added to the official `svgfetch-icons` library.'
+              body: [
+                '**[curated] Successfully added!**',
+                '',
+                `Brand **${{ steps.process.outputs.brand }}** has been validated, curated under \`${{ steps.process.outputs.category }}\`, and pushed to the registry.`,
+                '',
+                'It will be available via `svgfetch` within a few minutes once the CDN propagates.',
+                '',
+                '```',
+                'svgfetch ${{ steps.process.outputs.brand }}',
+                '```'
+              ].join('\n')
             });
             await github.rest.issues.update({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
-              state: 'closed'
+              state: 'closed',
+              labels: ['curated']
+            });
+
+      - name: Comment on Issue — Already Exists
+        if: |
+          github.event_name == 'issues' &&
+          steps.process.outputs.issue_number != '' &&
+          steps.process.outputs.skipped == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
+              body: '[info] This brand is already in the registry. Run `svgfetch ${{ steps.process.outputs.brand }}` to download it.'
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
+              state: 'closed',
+              labels: ['duplicate']
+            });
+
+      - name: Comment on Issue — Failed
+        if: |
+          github.event_name == 'issues' &&
+          steps.process.outputs.issue_number != '' &&
+          steps.process.outputs.failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
+              body: [
+                '[error] Auto-curation failed for this brand.',
+                '',
+                'Please provide a direct SVG URL or paste raw SVG content in the issue body. Example:',
+                '',
+                '```svg',
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">...</svg>',
+                '```'
+              ].join('\n')
             });

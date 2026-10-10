@@ -1,0 +1,83 @@
+name: "Request Brand Curation"
+description: "Request a new brand/logo to be added to the svgfetch-icons registry"
+title: "[curate]: BrandName | category | logo"
+labels: ["curation-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Request a Brand for Curation
+        Fill in the details below. The bot will validate and add it automatically.
+        **Title format**: `[curate]: BrandName | category | variant`
+        - **category**: `general`, `ai`, `devops`, `e-commerce`, `social`, `databases`, `languages`, `google`, `microsoft`, `adobe`, `meta`, `apple`, `amazon`
+        - **variant**: `logo` (default) or `icon`
+
+  - type: input
+    id: brand
+    attributes:
+      label: Brand Name
+      description: Exact brand name (e.g. Notion, Linear, Figma)
+      placeholder: "Notion"
+    validations:
+      required: true
+
+  - type: input
+    id: svg_url
+    attributes:
+      label: SVG URL (optional)
+      description: Direct link to an SVG file (Wikimedia Commons preferred). Leave blank for auto-search.
+      placeholder: "https://upload.wikimedia.org/wikipedia/commons/..."
+
+  - type: textarea
+    id: svg_content
+    attributes:
+      label: Raw SVG Content (optional)
+      description: Paste SVG directly if you have it. Takes priority over URL.
+      placeholder: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\">...</svg>"
+      render: svg
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - general
+        - ai
+        - devops
+        - e-commerce
+        - social
+        - databases
+        - languages
+        - google
+        - microsoft
+        - adobe
+        - meta
+        - apple
+        - amazon
+    validations:
+      required: true
+
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Variant
+      options:
+        - logo
+        - icon
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source / Attribution
+      description: Where did you get this SVG? (Wikimedia, brand official, etc.)
+      placeholder: "https://commons.wikimedia.org/wiki/..."
+
+  - type: checkboxes
+    id: license_confirm
+    attributes:
+      label: License Confirmation
+      options:
+        - label: "I confirm this SVG is freely usable (e.g. public domain, CC-BY, or similar open license)"
+          required: true
