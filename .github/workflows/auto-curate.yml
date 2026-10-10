@@ -1,0 +1,199 @@
+name: Autonomous Curation Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      brand:
+        description: 'Brand Name (e.g. Zepto)'
+        required: true
+      category:
+        description: 'Category (e.g. e-commerce, general)'
+        required: false
+        default: 'general'
+      variant:
+        description: 'Variant (logo or icon)'
+        required: false
+        default: 'logo'
+      svg_url:
+        description: 'Wikimedia / Source SVG URL'
+        required: false
+      svg_content:
+        description: 'Raw SVG content'
+        required: false
+  repository_dispatch:
+    types: [curate-brand]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  curate:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch' ||
+      (github.event_name == 'issues' && startsWith(github.event.issue.title, '[curate]:'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Process Curation Request
+        id: process
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const { execSync } = require("child_process");
+
+          const event = process.env.EVENT_NAME;
+          let brand = "";
+          let category = "general";
+          let variant = "logo";
+          let svgContent = "";
+          let svgUrl = "";
+          let issueNumber = null;
+
+          if (event === "workflow_dispatch") {
+            brand = process.env.INPUT_BRAND || "";
+            category = process.env.INPUT_CATEGORY || "general";
+            variant = process.env.INPUT_VARIANT || "logo";
+            svgUrl = process.env.INPUT_SVG_URL || "";
+            svgContent = process.env.INPUT_SVG_CONTENT || "";
+          } else if (event === "repository_dispatch") {
+            const clientPayload = JSON.parse(process.env.CLIENT_PAYLOAD || "{}");
+            brand = clientPayload.brand || "";
+            category = clientPayload.category || "general";
+            variant = clientPayload.variant || "logo";
+            svgUrl = clientPayload.svg_url || "";
+            svgContent = clientPayload.svg_content || "";
+          } else if (event === "issues") {
+            const title = process.env.ISSUE_TITLE || "";
+            const body = process.env.ISSUE_BODY || "";
+            issueNumber = process.env.ISSUE_NUMBER;
+
+            // Title format: [curate]: BrandName | category | variant
+            const parts = title.replace(/^\[curate\]:\s*/i, "").split("|").map(s => s.trim());
+            brand = parts[0] || "";
+            if (parts[1]) category = parts[1];
+            if (parts[2]) variant = parts[2];
+
+            // Extract SVG from body (can be inside ```xml or ```svg codeblock, or raw)
+            const codeBlockMatch = body.match(/```(?:xml|svg)?\s*([\s\S]*?)```/i);
+            if (codeBlockMatch) {
+              svgContent = codeBlockMatch[1].trim();
+            } else if (body.trim().startsWith("<svg")) {
+              svgContent = body.trim();
+            } else if (body.trim().startsWith("http")) {
+              svgUrl = body.trim().split(/\s+/)[0];
+            }
+          }
+
+          if (!brand) {
+            console.error("Brand name is missing!");
+            process.exit(1);
+          }
+
+          // Fetch from URL if content was not provided directly
+          if (!svgContent && svgUrl) {
+            console.log("Fetching SVG from URL:", svgUrl);
+            svgContent = execSync(`curl -sSL -H "User-Agent: svgfetch/0.3" "${svgUrl}"`, { encoding: "utf8" });
+          }
+
+          if (!svgContent || !svgContent.includes("<svg")) {
+            console.error("Invalid SVG content received!");
+            process.exit(1);
+          }
+
+          // Security validation: Reject script tags or oversized files
+          if (/<script/i.test(svgContent)) {
+            console.error("Security alert: SVG contains forbidden script tag!");
+            process.exit(1);
+          }
+          if (Buffer.byteLength(svgContent, "utf8") > 150 * 1024) {
+            console.error("File exceeds maximum allowed size (150KB)!");
+            process.exit(1);
+          }
+
+          const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          const fileName = (variant === "icon") ? `${brandSlug}-icon.svg` : `${brandSlug}.svg`;
+          const targetDir = path.join("logos", category);
+          const targetPath = path.join(targetDir, fileName);
+
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+          }
+
+          fs.writeFileSync(targetPath, svgContent.trim() + "\n", "utf8");
+          console.log(`Saved ${brand} to ${targetPath}`);
+
+          // Append to CONTRIBUTIONS.md
+          const logPath = "CONTRIBUTIONS.md";
+          const nowStr = new Date().toISOString().replace("T", " ").replace(/\..+/, " UTC");
+          const variantLabel = (variant === "icon") ? "Icon Mark" : "Full Logo";
+          const relPath = `logos/${category}/${fileName}`;
+          const row = `| ${nowStr} | ${brand} | ${category} | \`${relPath}\` | ${variantLabel} | Community Auto-Curation |\n`;
+
+          if (fs.existsSync(logPath)) {
+            fs.appendFileSync(logPath, row, "utf8");
+          }
+
+          // Regenerate manifest.json
+          execSync("node scripts/generate-manifest.js", { stdio: "inherit" });
+
+          // Output for next steps
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `brand=${brand}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `category=${category}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issueNumber || ""}\n`);
+          '
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BRAND: ${{ github.event.inputs.brand }}
+          INPUT_CATEGORY: ${{ github.event.inputs.category }}
+          INPUT_VARIANT: ${{ github.event.inputs.variant }}
+          INPUT_SVG_URL: ${{ github.event.inputs.svg_url }}
+          INPUT_SVG_CONTENT: ${{ github.event.inputs.svg_content }}
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      - name: Commit and Push to Main
+        run: |
+          git config --global user.name "svgfetch-bot[bot]"
+          git config --global user.email "svgfetch-bot[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(curate): auto-curate ${{ steps.process.outputs.brand }} (${{ steps.process.outputs.category }}) [skip ci]"
+          git push origin main
+
+      - name: Purge jsDelivr CDN Cache
+        run: |
+          curl -s https://purge.jsdelivr.net/gh/avdeshjadon/svgfetch-icons@main/manifest.json || true
+
+      - name: Close Issue (if applicable)
+        if: github.event_name == 'issues' && steps.process.outputs.issue_number != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
+              body: '🚀 **Successfully Curated!** "${{ steps.process.outputs.brand }}" has been validated, categorized under `${{ steps.process.outputs.category }}`, and added to the official `svgfetch-icons` library.'
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt('${{ steps.process.outputs.issue_number }}'),
+              state: 'closed'
+            });
