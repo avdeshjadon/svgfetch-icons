@@ -1,0 +1,17 @@
+{
+  "name": "svgfetch-icons",
+  "version": "1.0.0",
+  "description": "Curated vector brand logos & icon marks registry backed by global jsDelivr CDN",
+  "scripts": {
+    "manifest": "node scripts/generate-manifest.js"
+  },
+  "keywords": [
+    "svg",
+    "icons",
+    "logos",
+    "vector",
+    "svgfetch"
+  ],
+  "author": "Avdesh Jadon <theavdeshjadon@gmail.com>",
+  "license": "MIT"
+}
