@@ -6492,6 +6492,15 @@
     ]
   },
   {
+    "name": "Jio TV",
+    "shortname": "jiotv",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/jiotv.svg"
+    ]
+  },
+  {
     "name": "JIRA",
     "shortname": "jira",
     "category": "tools",
