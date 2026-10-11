@@ -4462,6 +4462,15 @@
     ]
   },
   {
+    "name": "Flipkart",
+    "shortname": "flipkart",
+    "category": "e-commerce",
+    "url": "",
+    "files": [
+      "e-commerce/flipkart.svg"
+    ]
+  },
+  {
     "name": "Flood IO",
     "shortname": "floodio",
     "category": "general",
