@@ -6,6 +6,7 @@ This document tracks all new vector assets curated into the `svgfetch-icons` lib
 
 | Date & Time (UTC) | Brand | Category | File Path | Variant | Source |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-10-11 09:15:15 UTC | Jio (formerly reliance) | general | `logos/general/jio.svg` | Full Logo | Renamed by admin (from general/reliance.svg) |
 | 2026-10-10 21:23:52 UTC | Myntra | e-commerce | `logos/e-commerce/myntra.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
 | 2026-10-10 16:28:09 UTC | Zomato | general | `logos/general/zomato.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
 | 2026-10-10 16:58:00 UTC | Amazon | amazon | `logos/amazon/amazon.svg` | Full Logo | Wikimedia Commons |
