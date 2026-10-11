@@ -12412,6 +12412,15 @@
     ]
   },
   {
+    "name": "Tux",
+    "shortname": "tux",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/tux.svg"
+    ]
+  },
+  {
     "name": "Twilio",
     "shortname": "twilio",
     "category": "general",

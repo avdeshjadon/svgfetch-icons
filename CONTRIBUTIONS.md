@@ -16,3 +16,4 @@ This document tracks all new vector assets curated into the `svgfetch-icons` lib
 | 2026-10-11 08:40:08 UTC | Reliance | general | `logos/general/reliance.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
 | 2026-10-11 09:29:25 UTC | Flipkart | e-commerce | `logos/e-commerce/flipkart.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
 | 2026-10-11 09:29:51 UTC | Kali Linux | general | `logos/general/kali-linux.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
+| 2026-10-11 09:30:08 UTC | Tux | general | `logos/general/tux.svg` | Full Logo | Wikimedia Commons (Auto-Curated) |
