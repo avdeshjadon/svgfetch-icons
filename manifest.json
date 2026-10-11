@@ -6684,6 +6684,15 @@
     ]
   },
   {
+    "name": "Kali Linux",
+    "shortname": "kali-linux",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/kali-linux.svg"
+    ]
+  },
+  {
     "name": "Kallithea",
     "shortname": "kallithea",
     "category": "general",
