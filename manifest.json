@@ -13328,15 +13328,6 @@
     ]
   },
   {
-    "name": "Whatsapp Monochrome",
-    "shortname": "whatsapp-monochrome",
-    "category": "meta",
-    "url": "",
-    "files": [
-      "meta/whatsapp-monochrome-icon.svg"
-    ]
-  },
-  {
     "name": "WHATWG",
     "shortname": "whatwg",
     "category": "general",
